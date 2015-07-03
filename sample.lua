@@ -16,6 +16,7 @@ require 'lfs'
 
 require 'util.OneHot'
 require 'util.misc'
+local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -31,6 +32,8 @@ cmd:option('-primetext'," ",'used as a prompt to "seed" the state of the LSTM us
 cmd:option('-length',2000,'number of characters to sample')
 cmd:option('-temperature',1,'temperature of sampling')
 cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
+cmd:option('-skip_unk',0,'whether to skip UNK tokens when sampling')
+cmd:option('-word_level',0,'whether to operate on the word level, instead of character level (0: use chars, 1: use words)') --todo: set this in checkpoint
 cmd:text()
 
 -- parse input params
@@ -81,7 +84,7 @@ protos.rnn:evaluate() -- put in eval mode so that dropout works properly
 
 -- do a few seeded timesteps
 print('seeding with ' .. seed_text)
-for c in seed_text:gmatch'.' do
+for c in CharSplitLMMinibatchLoader.tokens(seed_text, opt.word_level == 1) do --todo: word_level should be stored in checkpoint
     prev_char = torch.Tensor{vocab[c]}
     if opt.gpuid >= 0 then prev_char = prev_char:cuda() end
     local embedding = protos.embed:forward(prev_char)
@@ -104,7 +107,12 @@ for i=1, opt.length do
     else
         -- use sampling
         local probs = torch.exp(log_probs):squeeze()
-        prev_char = torch.multinomial(probs:float(), 1):resize(1):float()
+        if opt.skip_unk then
+            prev_char = torch.multinomial(probs:float(), 2):float()
+            prev_char = prev_char[1] == vocab["UNK"] and prev_char[{{2}}] or prev_char[{{1}}]
+        else
+            prev_char = torch.multinomial(probs:float(), 1):resize(1):float()
+        end
     end
 
     -- forward the rnn for next character
@@ -112,7 +120,14 @@ for i=1, opt.length do
     current_state = protos.rnn:forward{embedding, unpack(current_state)}
     if type(current_state) ~= 'table' then current_state = {current_state} end
 
-    io.write(ivocab[prev_char[1]])
+    word = ivocab[prev_char[1]]
+    if opt.word_level and word == "RN" then 
+        word = "\n"
+    end
+    io.write(word)
+    if opt.word_level then
+        io.write(" ")
+    end
 end
 io.write('\n') io.flush()
 

@@ -20,6 +20,7 @@ require 'optim'
 require 'lfs'
 
 require 'util.OneHot'
+require 'util.GloVeEmbedding'
 require 'util.misc'
 local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
 local model_utils = require 'util.model_utils'
@@ -55,6 +56,10 @@ cmd:option('-checkpoint_dir', 'cv', 'output directory where checkpoints get writ
 cmd:option('-savefile','lstm','filename to autosave the checkpont to. Will be inside checkpoint_dir/')
 -- GPU/CPU
 cmd:option('-gpuid',0,'which gpu to use. -1 = use CPU')
+cmd:option('-word_level',0,'whether to operate on the word level, instead of character level (0: use chars, 1: use words)')
+cmd:option('-threshold',0,'minimum number of occurences a token must have to be included (ignored if -word_level is 0)')
+cmd:option('-glove',0,'whether or not to use GloVe embeddings')
+cmd:option('-optimizer','rmsprop','which optimizer to use: adam or rmsprop')
 cmd:text()
 
 -- parse input params
@@ -71,7 +76,7 @@ if opt.gpuid >= 0 then
     cutorch.setDevice(opt.gpuid + 1) -- note +1 to make it 0 indexed! sigh lua
 end
 -- create the data loader class
-local loader = CharSplitLMMinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes)
+local loader = CharSplitLMMinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes, opt.word_level == 1, opt.threshold)
 local vocab_size = loader.vocab_size  -- the number of distinct characters
 print('vocab size: ' .. vocab_size)
 -- make sure output directory exists
@@ -79,9 +84,20 @@ if not path.exists(opt.checkpoint_dir) then lfs.mkdir(opt.checkpoint_dir) end
 
 -- define the model: prototypes for one timestep, then clone them in time
 protos = {}
-protos.embed = OneHot(vocab_size)
+local lstm_input_size = 0
+if opt.glove then
+    local glove_size = 200
+    protos.embed = GloVeEmbedding(loader.vocab_mapping, 'util/glove/vectors.6B.200d.txt', 200, opt.data_dir)
+    lstm_input_size = glove_size
+else
+    protos.embed = OneHot(vocab_size)
+    lstm_input_size = vocab_size
+end
 print('creating an LSTM with ' .. opt.num_layers .. ' layers')
-protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout)
+
+print('using optimizer ' .. opt.optimizer)
+
+protos.rnn = LSTM.lstm(lstm_input_size, opt.rnn_size, opt.num_layers, opt.dropout)
 -- the initial state of the cell/hidden states
 init_state = {}
 for L=1,opt.num_layers do
@@ -219,11 +235,14 @@ local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 local iterations = opt.max_epochs * loader.ntrain
 local iterations_per_epoch = loader.ntrain
 local loss0 = nil
+
+local optimizer = opt.optimizer == 'adam' and optim.adam or optim.rmsprop
+
 for i = 1, iterations do
     local epoch = i / loader.ntrain
 
     local timer = torch.Timer()
-    local _, loss = optim.rmsprop(feval, params, optim_state)
+    local _, loss = optimizer(feval, params, optim_state)
     local time = timer:time().real
 
     local train_loss = loss[1] -- the loss is inside a list, pop it

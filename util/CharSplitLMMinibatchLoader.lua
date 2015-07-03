@@ -1,3 +1,4 @@
+local rex = require 'rex_pcre'
 
 -- Modified from https://github.com/oxford-cs-ml-2015/practical6
 -- the modification included support for train/val/test splits
@@ -5,20 +6,24 @@
 local CharSplitLMMinibatchLoader = {}
 CharSplitLMMinibatchLoader.__index = CharSplitLMMinibatchLoader
 
-function CharSplitLMMinibatchLoader.create(data_dir, batch_size, seq_length, split_fractions)
+function CharSplitLMMinibatchLoader.create(data_dir, batch_size, seq_length, split_fractions, word_level, threshold)
     -- split_fractions is e.g. {0.9, 0.05, 0.05}
 
+    if not word_level then 
+        threshold = 0 
+    end
     local self = {}
     setmetatable(self, CharSplitLMMinibatchLoader)
 
-    local input_file = path.join(data_dir, 'input.txt')
-    local vocab_file = path.join(data_dir, 'vocab.t7')
-    local tensor_file = path.join(data_dir, 'data.t7')
+    self.word_level = word_level
+    local input_file = path.join(data_dir,  'input.txt')
+    local vocab_file = path.join(data_dir, word_level and 'vocab_w' .. threshold .. '.t7' or 'vocab.t7')
+    local tensor_file = path.join(data_dir, word_level and 'data_w' .. threshold .. '.t7' or 'data.t7')
 
     -- construct a tensor with all the data
     if not (path.exists(vocab_file) or path.exists(tensor_file)) then
         print('one-time setup: preprocessing input text file ' .. input_file .. '...')
-        CharSplitLMMinibatchLoader.text_to_tensor(input_file, vocab_file, tensor_file)
+        CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, input_file, vocab_file, tensor_file)
     end
 
     print('loading data files...')
@@ -83,9 +88,8 @@ function CharSplitLMMinibatchLoader:next_batch(split_index)
 end
 
 -- *** STATIC method ***
-function CharSplitLMMinibatchLoader.text_to_tensor(in_textfile, out_vocabfile, out_tensorfile)
+function CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, in_textfile, out_vocabfile, out_tensorfile)
     local timer = torch.Timer()
-
     print('loading text file...')
     local f = torch.DiskFile(in_textfile)
     local rawdata = f:readString('*a') -- NOTE: this reads the whole file at once
@@ -93,14 +97,31 @@ function CharSplitLMMinibatchLoader.text_to_tensor(in_textfile, out_vocabfile, o
 
     -- create vocabulary if it doesn't exist yet
     print('creating vocabulary mapping...')
+    print('word occurence threshold is ' .. threshold)
     -- record all characters to a set
     local unordered = {}
-    for char in rawdata:gmatch'.' do
-        if not unordered[char] then unordered[char] = true end
+    --rawdata = re.sub('([%s])' % (re.escape(string.punctuation)+"1234567890"), r" \1 ", rawdata)
+    local words = {}
+    for token in CharSplitLMMinibatchLoader.tokens(rawdata, word_level) do
+        if not unordered[token] then 
+            unordered[token] = 1 
+        else
+            unordered[token] = unordered[token] + 1 
+        end
+        if word_level then
+            words[#words + 1] = token
+        end
     end
     -- sort into a table (i.e. keys become 1..N)
     local ordered = {}
-    for char in pairs(unordered) do ordered[#ordered + 1] = char end
+    for token, count in pairs(unordered) do 
+        if count > threshold then
+            ordered[#ordered + 1] = token 
+        end
+    end
+    if word_level then
+        ordered[#ordered + 1] = "UNK" --represents unknown words
+    end
     table.sort(ordered)
     -- invert `ordered` to create the char->int mapping
     local vocab_mapping = {}
@@ -109,9 +130,15 @@ function CharSplitLMMinibatchLoader.text_to_tensor(in_textfile, out_vocabfile, o
     end
     -- construct a tensor with all the data
     print('putting data into tensor...')
-    local data = torch.ByteTensor(#rawdata) -- store it into 1D first, then rearrange
-    for i=1, #rawdata do
-        data[i] = vocab_mapping[rawdata:sub(i, i)] -- lua has no string indexing using []
+    local data = word_level and torch.ShortTensor(#words) or torch.ByteTensor(#rawdata) -- store it into 1D first, then rearrange
+    if word_level then
+        for i=1, #words do
+            data[i] = vocab_mapping[words[i]] or vocab_mapping["UNK"]
+        end
+    else
+        for i=1, #rawdata do
+            data[i] = vocab_mapping[rawdata:sub(i, i)] -- lua has no string indexing using []
+        end
     end
 
     -- save output preprocessed files
@@ -119,6 +146,16 @@ function CharSplitLMMinibatchLoader.text_to_tensor(in_textfile, out_vocabfile, o
     torch.save(out_vocabfile, vocab_mapping)
     print('saving ' .. out_tensorfile)
     torch.save(out_tensorfile, data)
+end
+
+function CharSplitLMMinibatchLoader.tokens(rawstr, word_level)
+    if word_level then
+        local str, _, _ = rex.gsub(rawstr, '[[:punct:][:digit:]]', ' %0 ')
+        str, _, _ = rex.gsub(str, '\\n', ' RN ')
+        return rex.split(str, "\\s+")
+    else
+        return rawstr:gmatch'.'
+    end
 end
 
 return CharSplitLMMinibatchLoader

@@ -1,6 +1,6 @@
 
 local LSTM = {}
-function LSTM.lstm(input_size, rnn_size, n, dropout, use_glove, vocab_mapping)
+function LSTM.lstm(input_size, rnn_size, n, dropout, embedding)
   dropout = dropout or 0 
 
   -- there will be 2*n+1 inputs
@@ -19,12 +19,14 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, use_glove, vocab_mapping)
     local prev_c = inputs[L*2]
     -- the input to this layer
     if L == 1 then
-      if use_glove then
-        x = GloVeEmbedding(vocab_mapping, 'util/glove/vectors.6B.' .. input_size .. 'd.txt', input_size, opt.data_dir)
+      if embedding ~= nil then
+        input_size_L = 200
+        local embedded = embedding(inputs[1])
+        x = nn.Tanh()(embedded)
       else
         x = OneHot(input_size)(inputs[1])
+        input_size_L = input_size
       end
-      input_size_L = input_size
     else 
       x = outputs[(L-1)*2] 
       if dropout > 0 then x = nn.Dropout(dropout)(x) end -- apply dropout, if any
@@ -54,7 +56,6 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, use_glove, vocab_mapping)
     table.insert(outputs, next_c)
     table.insert(outputs, next_h)
   end
-
   -- set up the decoder
   local top_h = outputs[#outputs]
   if dropout > 0 then top_h = nn.Dropout(dropout)(top_h) end

@@ -22,6 +22,7 @@ require 'lfs'
 require 'util.OneHot'
 require 'util.GloVeEmbedding'
 require 'util.misc'
+require 'util.PrintLinear'
 local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
 local model_utils = require 'util.model_utils'
 local LSTM = require 'model.LSTM'
@@ -113,6 +114,7 @@ end
 local loader = CharSplitLMMinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes, opt.word_level == 1, opt.threshold)
 local vocab_size = loader.vocab_size  -- the number of distinct characters
 local vocab = loader.vocab_mapping
+local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate }
 print('vocab size: ' .. vocab_size)
 -- make sure output directory exists
 if not path.exists(opt.checkpoint_dir) then lfs.mkdir(opt.checkpoint_dir) end
@@ -123,6 +125,7 @@ if string.len(opt.init_from) > 0 then
     print('loading an LSTM from checkpoint ' .. opt.init_from)
     local checkpoint = torch.load(opt.init_from)
     protos = checkpoint.protos
+    optim_state = checkpoint.optim_state
     -- make sure the vocabs are the same
     local vocab_compatible = true
     for c,i in pairs(checkpoint.vocab) do 
@@ -135,12 +138,23 @@ if string.len(opt.init_from) > 0 then
     print('overwriting rnn_size=' .. checkpoint.opt.rnn_size .. ', num_layers=' .. checkpoint.opt.num_layers .. ' based on the checkpoint.')
     opt.rnn_size = checkpoint.opt.rnn_size
     opt.num_layers = checkpoint.opt.num_layers
+    opt.optimizer = checkpoint.optimizer
     do_random_init = false
 else
     print('creating an LSTM with ' .. opt.num_layers .. ' layers')
     protos = {}
-    protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout)
+    local embedding = nil
+    if opt.glove then
+        embedding = GloVeEmbeddingFixed(vocab, 200, opt.data_dir)
+    end
+    protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     protos.criterion = nn.ClassNLLCriterion()
+
+    --local clusters = {}
+    --for w,i in pairs(vocab) do 
+    --    clusters[#clusters+1] = {1, i}
+    --end
+    --protos.criterion = nn.HSM(torch.Tensor(clusters), opt.rnn_size, 0) --vocab['UNK'])
 end
 
 print('using optimizer ' .. opt.optimizer)
@@ -167,7 +181,7 @@ params, grad_params = model_utils.combine_all_parameters(protos.rnn)
 
 -- initialization
 if do_random_init then
-params:uniform(-0.08, 0.08) -- small numbers uniform
+    params:uniform(-0.08, 0.08) -- small numbers uniform
 end
 
 print('number of parameters in the model: ' .. params:nElement())
@@ -247,6 +261,7 @@ function feval(x)
         rnn_state[t] = {}
         for i=1,#init_state do table.insert(rnn_state[t], lst[i]) end -- extract the state, without output
         predictions[t] = lst[#lst] -- last element is the prediction
+
         loss = loss + clones.criterion[t]:forward(predictions[t], y[{{}, t}])
     end
     loss = loss / opt.seq_length
@@ -278,12 +293,23 @@ end
 -- start optimization here
 train_losses = {}
 val_losses = {}
-local optim_state = {learningRate = opt.learning_rate, alpha = opt.decay_rate}
 local iterations = opt.max_epochs * loader.ntrain
 local iterations_per_epoch = loader.ntrain
 local loss0 = nil
 
-local optimizer = opt.optimizer == 'adam' and optim.adam or optim.rmsprop
+local optimizer = nil
+
+if opt.optimizer == 'adam' then
+    optimizer = optim.adam
+elseif opt.optimizer == 'sgd' then
+    optimizer = optim.sgd
+    optim_state.learningRateDecay = opt.decay_rate
+    optim_state.momentum = 0.99
+    optim_state.nesterov = true
+    optim_state.dampening = 0
+else
+    optimizer = optim.rmsprop
+end
 
 for i = 1, iterations do
     local epoch = i / loader.ntrain
@@ -295,8 +321,8 @@ for i = 1, iterations do
     local train_loss = loss[1] -- the loss is inside a list, pop it
     train_losses[i] = train_loss
 
-    -- exponential learning rate decay
-    if i % loader.ntrain == 0 and opt.learning_rate_decay < 1 then
+    -- exponential learning rate decay for rmsprop
+    if opt.optimizer == 'rmsprop' and i % loader.ntrain == 0 and opt.learning_rate_decay < 1 then
         if epoch >= opt.learning_rate_decay_after then
             local decay_factor = opt.learning_rate_decay
             optim_state.learningRate = optim_state.learningRate * decay_factor -- decay it
@@ -305,7 +331,11 @@ for i = 1, iterations do
     end
 
     -- every now and then or on last iteration
-    if i % opt.eval_val_every == 0 or i == iterations then
+    local eval_multiplier = 1
+    if epoch < 5 then
+        eval_multiplier = 1
+    end
+    if i % (opt.eval_val_every * eval_multiplier) == 0 or i == iterations then
         -- evaluate loss on validation data
         local val_loss = eval_split(2) -- 2 = validation
         val_losses[i] = val_loss
@@ -321,6 +351,8 @@ for i = 1, iterations do
         checkpoint.i = i
         checkpoint.epoch = epoch
         checkpoint.vocab = loader.vocab_mapping
+        checkpoint.optim_state = optim_state
+        checkpoint.optimizer = opt.optimizer
         torch.save(savefile, checkpoint)
     end
 

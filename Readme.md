@@ -1,5 +1,18 @@
 
-# char-rnn
+# word-rnn
+
+This is a fork of Andrej Karpathy's wonderful char-rnn, modified to 
+1) be able to predict word-by-word
+2) use word vectors for representing words
+3) use different forms of optimizers (Adam optimizer is recommended)
+
+This code was used to produce http://clickotron.com 
+
+See http://larseidnes.com/2015/10/13/auto-generating-clickbait-with-recurrent-neural-networks for details.
+
+The code expects the GloVe embeddings to be stored in a file at util\glove\vectors.6B.200d.txt . This file, and other similar ones, can be downloaded from http://nlp.stanford.edu/projects/glove/
+
+#char-rnn documentation below
 
 This code implements **multi-layer Recurrent Neural Network** (RNN, LSTM, and GRU) for training/sampling from character-level language models. The model learns to predict the probability of the next character in a sequence. In other words, the input is a single text file and the model learns to generate text like it.
 

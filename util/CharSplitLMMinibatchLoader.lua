@@ -141,16 +141,14 @@ function CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, in_tex
     -- record all characters to a set
     local unordered = {}
     --rawdata = re.sub('([%s])' % (re.escape(string.punctuation)+"1234567890"), r" \1 ", rawdata)
-    local words = {}
+    local numtokens = 0    
     for token in CharSplitLMMinibatchLoader.tokens(rawdata, word_level) do
         if not unordered[token] then 
             unordered[token] = 1 
         else
             unordered[token] = unordered[token] + 1 
         end
-        if word_level then
-            words[#words + 1] = token
-        end
+        numtokens = numtokens + 1
     end
     -- sort into a table (i.e. keys become 1..N)
     local ordered = {}
@@ -170,10 +168,12 @@ function CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, in_tex
     end
     -- construct a tensor with all the data
     print('putting data into tensor...')
-    local data = word_level and torch.ShortTensor(#words) or torch.ByteTensor(#rawdata) -- store it into 1D first, then rearrange
+    local data = word_level and torch.ShortTensor(numtokens) or torch.ByteTensor(#rawdata) -- store it into 1D first, then rearrange
     if word_level then
-        for i=1, #words do
-            data[i] = vocab_mapping[words[i]] or vocab_mapping["UNK"]
+        local i = 1
+        for token in CharSplitLMMinibatchLoader.tokens(rawdata, word_level) do
+            data[i] = vocab_mapping[token] or vocab_mapping["UNK"]
+            i = i + 1
         end
     else
         for i=1, #rawdata do
@@ -190,13 +190,57 @@ end
 
 function CharSplitLMMinibatchLoader.tokens(rawstr, word_level)
     if word_level then
-        local str, _, _ = rex.gsub(rawstr, '[[:punct:][:digit:]]', ' %0 ')
-        str, _, _ = rex.gsub(str, '\\n', ' RN ')
-        return rex.split(str, "\\s+")
+        --local str, _, _ = rex.gsub(rawstr, '[[:punct:][:digit:]]', ' %0 ')
+        --str, _, _ = rex.gsub(str, '\\n', ' RN ')
+        --return rex.split(str, "\\s+")
+        return word_iter(rawstr)
     else
         return rawstr:gmatch'.'
     end
 end
 
+function word_iter(str)
+    local n = str:len()
+    local punctdigit = rex.new('[[:punct:][:digit:]]')
+    local newline = rex.new('\\n')
+    local whitespace = rex.new('[ \\t]') --dont match newlines
+    local char_iter = str:gmatch'.'
+    local c = char_iter()
+    return function()
+        if c == nil then return nil end
+        while rex.count(c, whitespace) > 0 do
+            c = char_iter()
+            if c == nil then return nil end
+        end
+        if rex.count(c, punctdigit) > 0 then
+            local ret = c
+            c = char_iter()
+            return ret
+        end
+        if rex.count(c, newline) > 0 then
+            c = char_iter()
+            return '\n'
+        end
+        local word = ''
+        repeat
+            word = word .. c
+            c = char_iter()
+            if c == nil then return word end
+        until rex.count(c, whitespace) > 0 or rex.count(c, punctdigit) > 0 or rex.count(c, newline) > 0
+        
+        return word
+    end
+end
+
 return CharSplitLMMinibatchLoader
+
+
+
+
+
+
+
+
+
+
 

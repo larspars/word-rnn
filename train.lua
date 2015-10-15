@@ -22,7 +22,6 @@ require 'lfs'
 require 'util.OneHot'
 require 'util.GloVeEmbedding'
 require 'util.misc'
-require 'util.PrintLinear'
 local CharSplitLMMinibatchLoader = require 'util.CharSplitLMMinibatchLoader'
 local model_utils = require 'util.model_utils'
 local LSTM = require 'model.LSTM'
@@ -331,7 +330,7 @@ for i = 1, iterations do
     end
 
     -- every now and then or on last iteration
-    local eval_multiplier = 1
+    local eval_multiplier = 1 --change this to eval less often in the first iterations
     if epoch < 5 then
         eval_multiplier = 1
     end

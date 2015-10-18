@@ -30,6 +30,8 @@ $ luarocks install nngraph
 $ luarocks install optim
 ```
 
+Also, you need [fbcunn](https://github.com/facebook/fbcunn). See [here](https://github.com/facebook/fbcunn/blob/master/INSTALL.md) for an installation guide.
+
 If you'd like to use CUDA GPU computing, you'll first need to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit), then the `cutorch` and `cunn` packages:
 
 ```bash

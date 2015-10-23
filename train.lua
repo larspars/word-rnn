@@ -152,9 +152,9 @@ else
     if opt.model == 'lstm' then
 		protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     elseif opt.model == 'gru' then
-        protos.rnn = GRU.gru(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout) --TODO: implement use of embeddings
+        protos.rnn = GRU.gru(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     elseif opt.model == 'rnn' then
-        protos.rnn = RNN.rnn(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout) --TODO: implement use of embeddings
+        protos.rnn = RNN.rnn(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     end
     protos.criterion = nn.ClassNLLCriterion()
 

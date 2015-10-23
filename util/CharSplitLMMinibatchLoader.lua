@@ -176,9 +176,9 @@ function CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, in_tex
             i = i + 1
         end
     else
-        for i=1, #rawdata do
-            data[i] = vocab_mapping[rawdata:sub(i, i)] -- lua has no string indexing using []
-        end
+		for i=1, #rawdata do
+			data[i] = vocab_mapping[rawdata:sub(i, i)] -- lua has no string indexing using []
+		end
     end
 
     -- save output preprocessed files

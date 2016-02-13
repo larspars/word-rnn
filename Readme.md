@@ -36,6 +36,7 @@ See the Torch installation documentation for more details. After Torch is instal
 $ luarocks install nngraph 
 $ luarocks install optim
 $ luarocks install nn
+$ luarocks install underscore.lua --from=http://marcusirven.s3.amazonaws.com/rocks/
 ```
 Also, you need [fbcunn](https://github.com/facebook/fbcunn). See [here](https://github.com/facebook/fbcunn/blob/master/INSTALL.md) for an installation guide.
 

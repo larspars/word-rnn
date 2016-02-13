@@ -1,4 +1,4 @@
-require 'fbcunn' 
+--require 'fbcunn' 
 
 function split(inputstr, sep)
     if sep == nil then
@@ -18,7 +18,7 @@ function numkeys(T)
     return count
 end
 
-local GloVeEmbedding, parent = torch.class('GloVeEmbedding', 'nn.LookupTableGPU')--torch.class('GloVeEmbedding', 'nn.Module')
+local GloVeEmbedding, parent = torch.class('GloVeEmbedding', 'nn.LookupTable') --torch.class('GloVeEmbedding', 'nn.LookupTableGPU')
 
 function GloVeEmbedding:__init(word2idx, embedding_size, data_dir)
     -- you need glove embeddings in the directory ./util/glove/
@@ -32,6 +32,7 @@ function GloVeEmbedding:__init(word2idx, embedding_size, data_dir)
     self.embedding_size = embedding_size
     --load glove vectors as a tensor from a .t7 file if it exists, otherwise generate that .t7 file
     local vocab_embedding_file = path.join(data_dir, "glove_" .. self.vocab_size .. "x" .. embedding_size .. ".t7")
+    --vocab_embedding_file = "lstm-glove-w.t7"
     --(if you want to load a different word vector here, just swap the vocab_embedding_file file name with something else)
     if path.exists(vocab_embedding_file) then
         self.weight = torch.load(vocab_embedding_file):clone()

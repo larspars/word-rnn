@@ -27,6 +27,7 @@ local model_utils = require 'util.model_utils'
 local LSTM = require 'model.LSTM'
 local GRU = require 'model.GRU'
 local RNN = require 'model.RNN'
+local IRNN = require 'model.IRNN'
 
 cmd = torch.CmdLine()
 cmd:text()
@@ -38,13 +39,15 @@ cmd:option('-data_dir','data/tinyshakespeare','data directory. Should contain th
 -- model params
 cmd:option('-rnn_size', 128, 'size of LSTM internal state')
 cmd:option('-num_layers', 2, 'number of layers in the LSTM')
-cmd:option('-model', 'lstm', 'lstm,gru or rnn')
+cmd:option('-num_fixed', 0 ,'number of recurrent layers to remain fixed (untrained), pretrained (LSTM only)')
+cmd:option('-model', 'lstm', 'lstm, gru, rnn or irnn')
 -- optimization
 cmd:option('-learning_rate',2e-3,'learning rate')
 cmd:option('-learning_rate_decay',0.97,'learning rate decay')
 cmd:option('-learning_rate_decay_after',10,'in number of epochs, when to start decaying the learning rate')
 cmd:option('-decay_rate',0.95,'decay rate for rmsprop')
 cmd:option('-dropout',0,'dropout for regularization, used after each RNN hidden layer. 0 = no dropout')
+cmd:option('-recurrent_dropout',0,'dropout for regularization, used on recurrent connections. 0 = no dropout')
 cmd:option('-seq_length',50,'number of timesteps to unroll for')
 cmd:option('-batch_size',50,'number of sequences to train on in parallel')
 cmd:option('-max_epochs',50,'number of full passes through the training data')
@@ -67,6 +70,7 @@ cmd:option('-word_level',0,'whether to operate on the word level, instead of cha
 cmd:option('-threshold',0,'minimum number of occurences a token must have to be included (ignored if -word_level is 0)')
 cmd:option('-glove',0,'whether or not to use GloVe embeddings')
 cmd:option('-optimizer','rmsprop','which optimizer to use: adam or rmsprop')
+
 cmd:text()
 
 -- parse input params
@@ -112,6 +116,8 @@ if opt.gpuid >= 0 and opt.opencl == 1 then
     end
 end
 
+require 'util.SharedDropout'
+
 -- create the data loader class
 local loader = CharSplitLMMinibatchLoader.create(opt.data_dir, opt.batch_size, opt.seq_length, split_sizes, opt.word_level == 1, opt.threshold)
 local vocab_size = loader.vocab_size  -- the number of distinct characters
@@ -123,11 +129,13 @@ if not path.exists(opt.checkpoint_dir) then lfs.mkdir(opt.checkpoint_dir) end
 
 -- define the model: prototypes for one timestep, then clone them in time
 local do_random_init = true
+local h2hs = nil
 if string.len(opt.init_from) > 0 then
     print('loading an LSTM from checkpoint ' .. opt.init_from)
     local checkpoint = torch.load(opt.init_from)
     protos = checkpoint.protos
     optim_state = checkpoint.optim_state
+    optim_state.learningRate = opt.learning_rate
     -- make sure the vocabs are the same
     local vocab_compatible = true
     for c,i in pairs(checkpoint.vocab) do 
@@ -146,15 +154,17 @@ else
     print('creating an ' .. opt.model .. ' with ' .. opt.num_layers .. ' layers')
     protos = {}
     local embedding = nil
-    if opt.glove then
-        embedding = GloVeEmbeddingFixed(vocab, 200, opt.data_dir)
+    if opt.glove == 1 then
+        embedding = GloVeEmbedding(vocab, 200, opt.data_dir) --GloVeEmbeddingFixed(vocab, 200, opt.data_dir)
     end
     if opt.model == 'lstm' then
-		protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
+	protos.rnn = LSTM.lstm(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, opt.recurrent_dropout, embedding, opt.num_fixed)
     elseif opt.model == 'gru' then
         protos.rnn = GRU.gru(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     elseif opt.model == 'rnn' then
         protos.rnn = RNN.rnn(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
+    elseif opt.model == 'irnn' then
+        protos.rnn, h2hs = IRNN.rnn(vocab_size, opt.rnn_size, opt.num_layers, opt.dropout, embedding)
     end
     protos.criterion = nn.ClassNLLCriterion()
 
@@ -174,8 +184,8 @@ for L=1,opt.num_layers do
     if opt.gpuid >=0 and opt.opencl == 1 then h_init = h_init:cl() end
     table.insert(init_state, h_init:clone())
     if opt.model == 'lstm' then
-		table.insert(init_state, h_init:clone())
-	end
+        table.insert(init_state, h_init:clone())
+    end
 end
 
 -- ship the model to the GPU if desired
@@ -191,13 +201,15 @@ params, grad_params = model_utils.combine_all_parameters(protos.rnn)
 
 -- initialization
 if do_random_init then
-    params:uniform(-0.08, 0.08) -- small uniform numbers
+    if opt.model ~= 'irnn' then --irnns initialize themselves to the identity matrix
+        params:uniform(-0.08, 0.08) -- small uniform numbers
+    end
 end
 -- initialize the LSTM forget gates with slightly higher biases to encourage remembering in the beginning
-if opt.model == 'lstm' then
+if opt.model == 'lstm' and string.len(opt.init_from) == 0 then
     for layer_idx = 1, opt.num_layers do
         for _,node in ipairs(protos.rnn.forwardnodes) do
-            if node.data.annotations.name == "i2h_" .. layer_idx then
+            if node.data.annotations.name == "i2h_" .. layer_idx and layer_idx > opt.num_fixed then
                 print('setting forget gate biases to 1 in LSTM layer ' .. layer_idx)
                 -- the gates are, in order, i,f,o,g, so f is the 2nd block of weights
                 node.data.module.bias[{{opt.rnn_size+1, 2*opt.rnn_size}}]:fill(1.0)
@@ -274,6 +286,12 @@ function feval(x)
     local x, y = loader:next_batch(1)
     x,y = prepro(x,y)
     ------------------- forward pass -------------------
+    if opt.recurrent_dropout ~= 0 then 
+        --todo: these are shared across all layers in depth also. that's not optimal
+        SharedDropout_noise:resize(opt.batch_size, opt.rnn_size)
+        SharedDropout_noise:bernoulli(1 - opt.recurrent_dropout)
+        SharedDropout_noise:div(1 - opt.recurrent_dropout)
+    end
     local rnn_state = {[0] = init_state_global}
     local predictions = {}           -- softmax outputs
     local loss = 0
@@ -337,6 +355,7 @@ for i = 1, iterations do
     local epoch = i / loader.ntrain
 
     local timer = torch.Timer()
+
     local _, loss = optimizer(feval, params, optim_state)
     if opt.accurate_gpu_timing == 1 and opt.gpuid >= 0 then
         --[[
@@ -362,8 +381,8 @@ for i = 1, iterations do
 
     -- every now and then or on last iteration
     local eval_multiplier = 1 --change this to eval less often in the first iterations
-    if epoch < 5 then
-        eval_multiplier = 1
+    if epoch < 10 then
+        eval_multiplier = 2
     end
     if i % (opt.eval_val_every * eval_multiplier) == 0 or i == iterations then
         -- evaluate loss on validation data
@@ -389,6 +408,16 @@ for i = 1, iterations do
     if i % opt.print_every == 0 then
         print(string.format("%d/%d (epoch %.3f), train_loss = %6.8f, grad/param norm = %6.4e, time/batch = %.4fs", i, iterations, epoch, train_loss, grad_params:norm() / params:norm(), time))
     end
+
+    if i % (opt.print_every*10) == 0 then
+        --print(string.format("%d/%d (epoch %.3f), train_loss = %6.8f, grad/param norm = %6.4e, time/batch = %.4fs", i, iterations, epoch, train_loss, grad_params:norm() / params:norm(), time))
+        --e, V = torch.eig(h2hs[1].data.module.weight:float(), 'N')
+        --print(e[1])
+        --e, V = torch.eig(h2hs[2].data.module.weight:float(), 'N')
+        --print(e[1])
+        --e, V = torch.eig(h2hs[3].data.module.weight:float(), 'N')
+        --print(e[1])
+    end
    
     if i % 10 == 0 then collectgarbage() end
 
@@ -398,8 +427,8 @@ for i = 1, iterations do
         break -- halt
     end
     if loss0 == nil then loss0 = loss[1] end
-    if loss[1] > loss0 * 3 then
-        print('loss is exploding, aborting.')
+    if loss[1] > loss0 * 100 then
+        print(string.format("loss is exploding, aborting. (%6.2f vs %6.2f)", loss0, loss[1]))
         break -- halt
     end
 end

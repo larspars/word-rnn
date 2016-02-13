@@ -123,7 +123,7 @@ function model_utils.clone_many_times(net, T)
 
     local paramsNoGrad
     if net.parametersNoGrad then
-        paramsNoGrad = net:parametersNoGrad()
+        paramsNoGrad = net:parametersNoGrad() 
     end
 
     local mem = torch.MemoryFile("w"):binary()

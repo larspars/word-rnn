@@ -81,6 +81,7 @@ if opt.gpuid >= 0 and opt.opencl == 1 then
         opt.gpuid = -1 -- overwrite user setting
     end
 end
+require 'util.SharedDropout'
 
 torch.manualSeed(opt.seed)
 

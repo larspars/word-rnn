@@ -37,6 +37,7 @@ $ luarocks install nngraph
 $ luarocks install optim
 $ luarocks install nn
 $ luarocks install underscore.lua --from=http://marcusirven.s3.amazonaws.com/rocks/
+$ sudo luarocks install lrexlib-pcre PCRE_DIR=/lib/x86_64-linux-gnu/
 ```
 Also, you need [fbcunn](https://github.com/facebook/fbcunn). See [here](https://github.com/facebook/fbcunn/blob/master/INSTALL.md) for an installation guide.
 

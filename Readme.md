@@ -2,9 +2,11 @@
 # word-rnn
 
 This is a fork of Andrej Karpathy's wonderful [char-rnn](https://github.com/karpathy/char-rnn), modified to 
-1) be able to predict word-by-word
-2) use word vectors for representing words
-3) use different forms of optimizers (Adam optimizer is recommended)
+
+1. be able to predict word-by-word
+2. use pre-trained word vectors to represent input words
+3. use different forms of optimizers (Adam optimizer is recommended)
+4. support dropout along recurrent connections
 
 This code was used to produce http://clickotron.com 
 

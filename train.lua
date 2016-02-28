@@ -128,7 +128,6 @@ print('vocab size: ' .. vocab_size)
 if not path.exists(opt.checkpoint_dir) then lfs.mkdir(opt.checkpoint_dir) end
 
 -- define the model: prototypes for one timestep, then clone them in time
-local do_random_init = true
 local h2hs = nil
 if string.len(opt.init_from) > 0 then
     print('loading a model from checkpoint ' .. opt.init_from)
@@ -156,7 +155,6 @@ if string.len(opt.init_from) > 0 then
     opt.num_layers = checkpoint.opt.num_layers
     opt.optimizer = checkpoint.optimizer
     opt.model = checkpoint.opt.model
-    do_random_init = false
 else
     print('creating an ' .. opt.model .. ' with ' .. opt.num_layers .. ' layers')
     protos = {}
@@ -206,12 +204,6 @@ end
 -- put the above things into one flattened parameters tensor
 params, grad_params = model_utils.combine_all_parameters(protos.rnn)
 
--- initialization
-if do_random_init then
-    if opt.model ~= 'irnn' then --irnns initialize themselves to the identity matrix
-        params:uniform(-0.08, 0.08) -- small uniform numbers
-    end
-end
 -- initialize the LSTM forget gates with slightly higher biases to encourage remembering in the beginning
 if opt.model == 'lstm' and string.len(opt.init_from) == 0 then
     for layer_idx = 1, opt.num_layers do
@@ -387,9 +379,9 @@ for i = 1, iterations do
     end
 
     -- every now and then or on last iteration
-    local eval_multiplier = 1 --change this to eval less often in the first iterations
+    local eval_multiplier = 1
     if epoch < 10 then
-        eval_multiplier = 2
+        eval_multiplier = 1 --increase this to eval less often in the first iterations
     end
     if i % (opt.eval_val_every * eval_multiplier) == 0 or i == iterations then
         -- evaluate loss on validation data

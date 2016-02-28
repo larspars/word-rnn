@@ -34,12 +34,12 @@ See the Torch installation documentation for more details. After Torch is instal
 
 ```bash
 $ luarocks install nngraph 
+$ luarocks install nninit 
 $ luarocks install optim
 $ luarocks install nn
 $ luarocks install underscore.lua --from=http://marcusirven.s3.amazonaws.com/rocks/
 $ sudo luarocks install lrexlib-pcre PCRE_DIR=/lib/x86_64-linux-gnu/
 ```
-Also, you need [fbcunn](https://github.com/facebook/fbcunn). See [here](https://github.com/facebook/fbcunn/blob/master/INSTALL.md) for an installation guide.
 
 If you'd like to train on an NVIDIA GPU using CUDA (this can be to about 15x faster), you'll of course need the GPU, and you will have to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit). Then get the `cutorch` and `cunn` packages:
 

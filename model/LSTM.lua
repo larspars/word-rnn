@@ -1,5 +1,5 @@
 _ = require 'underscore'
---local nninit = require 'nninit'
+local nninit = require 'nninit'
 
 local LSTM = {}
 function LSTM.lstm(input_size, rnn_size, n, dropout, recurrent_dropout, embedding, num_fixed)
@@ -67,8 +67,8 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, recurrent_dropout, embeddin
         fixeds[#fixeds+1] = i2h.data.module
         fixeds[#fixeds+1] = h2h.data.module
     else 
-    	i2h = nn.Linear(input_size_L, 4 * rnn_size)(x):annotate{name='i2h_'..L}
-    	h2h = nn.Linear(rnn_size, 4 * rnn_size)(prev_h):annotate{name='h2h_'..L}
+    	i2h = nn.Linear(input_size_L, 4 * rnn_size):init('weight', nninit.uniform, -0.08, 0.08)(x):annotate{name='i2h_'..L}
+    	h2h = nn.Linear(rnn_size, 4 * rnn_size):init('weight', nninit.uniform, -0.08, 0.08)(prev_h):annotate{name='h2h_'..L}
     end
     
     local all_input_sums = nn.CAddTable()({i2h, h2h})
@@ -95,7 +95,7 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, recurrent_dropout, embeddin
   -- set up the decoder
   local top_h = outputs[#outputs]
   if dropout > 0 then top_h = nn.Dropout(dropout)(top_h) end
-  local proj = nn.Linear(rnn_size, input_size)(top_h):annotate{name='decoder'}
+  local proj = nn.Linear(rnn_size, input_size):init('weight', nninit.uniform, -0.08, 0.08)(top_h):annotate{name='decoder'}
   local logsoft = nn.LogSoftMax()(proj)
   table.insert(outputs, logsoft)
 

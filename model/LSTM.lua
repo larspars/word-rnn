@@ -38,27 +38,7 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, recurrent_dropout, embeddin
 
 
     if recurrent_dropout > 0 then prev_h = nn.SharedDropout(dropout)(prev_h) end
-    x = nn.BatchNormalization(input_size_L)(x)
 
-    --residual component, heightwise
-    --how many of these components are optimal? 
-    --what weight initialization should be used? xavier? kaiming? orthogonal?
-    --local skip = x
-    --x = nn.Tanh()(nn.Linear(input_size_L, input_size_L):init('weight', nninit.kaiming)(x))
-    --x = nn.Tanh()(nn.Linear(input_size_L, input_size_L):init('weight', nninit.kaiming)(x)) --one or two layers here?
-    --x = nn.BatchNormalization(input_size_L)(x)
-    --x = nn.CAddTable(){x, skip}
-
-    --residual component, lengthwise
-    --how many of these components are optimal?
-    --what weight initialization should be used? xavier? kaiming? orthogonal?
-    --skip = prev_h
-    --prev_h = nn.Tanh()(nn.Linear(rnn_size, rnn_size):init('weight', nninit.kaiming)(prev_h))
-    --prev_h = nn.Tanh()(nn.Linear(rnn_size, rnn_size):init('weight', nninit.kaiming)(prev_h)) --one or two layers here?
-    --prev_h = nn.BatchNormalization(rnn_size)(prev_h)
-    --prev_h = nn.CAddTable(){prev_h, skip}
-
-    -- evaluate the input sums at once for efficiency
     local i2h = nil
     local h2h = nil
     if L <= num_fixed then
@@ -88,7 +68,6 @@ function LSTM.lstm(input_size, rnn_size, n, dropout, recurrent_dropout, embeddin
       })
     -- gated cells form the output
     local next_h = nn.CMulTable()({out_gate, nn.Tanh()(next_c)})
-    --next_h = nn.BatchNormalization(rnn_size)(next_h) --does this help?
     table.insert(outputs, next_c)
     table.insert(outputs, next_h)
   end

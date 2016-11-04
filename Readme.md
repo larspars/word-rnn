@@ -14,6 +14,36 @@ See http://larseidnes.com/2015/10/13/auto-generating-clickbait-with-recurrent-ne
 
 The code expects the GloVe embeddings to be stored in a file at util\glove\vectors.6B.200d.txt . This file, and other similar ones, can be downloaded from http://nlp.stanford.edu/projects/glove/
 
+## word-rnn Docker image
+
+This code can be executed by pulling one of the following docker images:
+
+* `rtlee/word-rnn:train`: full Torch environment, including GloVe embeddings
+* `rtlee/word-rnn:sample`: full Torch environment, not including GloVe embeddings
+
+#### Sample usage: train word-level model, initialized with GloVe embeddings
+
+1. Pull docker image: `docker pull rtlee/word-rnn:train`
+1. Enter docker container: `docker run -t -i rtlee/word-rnn:train /bin/bash`
+1. Train model: `th train.lua -gpuid -1 -word_level 1 -glove 1`*
+1. Sample from checkpoint: `th sample.lua cv/some_checkpoint.t7 -gpuid -1`*
+
+#### Sample usage: train word-level model, without GloVe embeddings
+
+1. Pull docker image: `docker pull rtlee/word-rnn:sample`
+1. Enter docker container: `docker run -t -i rtlee/word-rnn:sample /bin/bash`
+1. Train model: `th train.lua -gpuid -1 -word_level 1`*
+1. Sample from checkpoint: `th sample.lua cv/some_checkpoint.t7 -gpuid -1`*
+
+#### Sample usage: train character-level model
+
+1. Pull docker image: `docker pull rtlee/word-rnn:sample`
+1. Enter docker container: `docker run -t -i rtlee/word-rnn:sample /bin/bash`
+1. Train model: `th train.lua -gpuid -1`*
+1. Sample from checkpoint: `th sample.lua cv/some_checkpoint.t7 -gpuid -1`*
+
+<i>\* Note  if executing without a GPU, you will need to change `SharedDropout_noise = torch.CudaTensor()` to `SharedDropout_noise = torch.Tensor()` in line 3 of the file `util/SharedDropout.lua`</i>
+
 #char-rnn documentation below
 
 This code implements **multi-layer Recurrent Neural Network** (RNN, LSTM, and GRU) for training/sampling from character-level language models. In other words the model takes one text file as input and trains a Recurrent Neural Network that learns to predict the next character in a sequence. The RNN can then be used to genrate text character by character that will look like the original training data. The context of this code base is described in detail in my [blog post](http://karpathy.github.io/2015/05/21/rnn-effectiveness/).

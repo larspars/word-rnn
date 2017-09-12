@@ -6,7 +6,14 @@ This is a fork of Andrej Karpathy's wonderful [char-rnn](https://github.com/karp
 1. be able to predict word-by-word
 2. use pre-trained word vectors to represent input words
 3. use different forms of optimizers (Adam optimizer is recommended)
-4. support dropout along recurrent connections
+4. support dropout along recurrent connections (like rnnDrop and variational dropout)
+5. support Layer Sequential Unit-Variance (LSUV) initialization
+6. support multiplicative integration
+7. support zoneout
+8. support stochastic depth
+8. support bipolar activation functions
+
+... among other things.
 
 This code was used to produce http://clickotron.com 
 
@@ -14,7 +21,15 @@ See http://larseidnes.com/2015/10/13/auto-generating-clickbait-with-recurrent-ne
 
 The code expects the GloVe embeddings to be stored in a file at util\glove\vectors.6B.200d.txt . This file, and other similar ones, can be downloaded from http://nlp.stanford.edu/projects/glove/
 
-#char-rnn documentation below
+# Reproduce results from Bipolar Activation Functions paper
+
+To reproduce the results in our paper "Shifting Mean Activations Towards Zero with Bipolar Activation Functions", you can run the command:
+
+```th train.lua -data_dir /path/to/PennTreebank/ -optimizer adam -word_level 0 -train_frac 0.85722067868 -val_frac 0.06717540321 -checkpoint_dir /path/to/checkpoint_dir/ -eval_val_every 3188 -learning_rate_decay_by_val_loss 1 -batch_size 128 -batch_normalization 0 -non_glove_embedding 1 -learn_embeddings 0 -learning_rate 0.0002  -layer_normalization 0 -max_epochs 200 -grad_clip 0 -random_crops 1 -l2 0.0 -seq_length 50 -zoneout 0  -multiplicative_integration 0 -print_every 50 -lsuv_init 1 -max_norm 0 -model sdrnn -num_layers 36 -rnn_size 256 -embedding_size 256 -dropout 0.05 -recurrent_dropout 0.025 -gpuid 0```
+
+This trains a 36 layer vanilla-RNN, using the Bipolar ELU activation function and LSUV initialization. It has skip connections between blocks of 4 layers, and a 2.5% probability of skipping a block.
+
+## char-rnn documentation below
 
 This code implements **multi-layer Recurrent Neural Network** (RNN, LSTM, and GRU) for training/sampling from character-level language models. In other words the model takes one text file as input and trains a Recurrent Neural Network that learns to predict the next character in a sequence. The RNN can then be used to genrate text character by character that will look like the original training data. The context of this code base is described in detail in my [blog post](http://karpathy.github.io/2015/05/21/rnn-effectiveness/).
 

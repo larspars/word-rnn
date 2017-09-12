@@ -21,7 +21,7 @@ See http://larseidnes.com/2015/10/13/auto-generating-clickbait-with-recurrent-ne
 
 The code expects the GloVe embeddings to be stored in a file at util\glove\vectors.6B.200d.txt . This file, and other similar ones, can be downloaded from http://nlp.stanford.edu/projects/glove/
 
-# Reproduce results from Bipolar Activation Functions paper
+## Reproduce results from Bipolar Activation Functions paper
 
 To reproduce the results in our paper "Shifting Mean Activations Towards Zero with Bipolar Activation Functions", you can run the command:
 

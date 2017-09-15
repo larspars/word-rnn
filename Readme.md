@@ -23,7 +23,7 @@ The code expects the GloVe embeddings to be stored in a file at util\glove\vecto
 
 ## Reproduce results from Bipolar Activation Functions paper
 
-To reproduce the results in our paper "Shifting Mean Activations Towards Zero with Bipolar Activation Functions", you can run the command:
+To reproduce the results in our paper "[Shifting Mean Activations Towards Zero with Bipolar Activation Functions](https://arxiv.org/abs/1709.04054)", you can run the command:
 
 ```th train.lua -data_dir /path/to/PennTreebank/ -optimizer adam -word_level 0 -train_frac 0.85722067868 -val_frac 0.06717540321 -checkpoint_dir /path/to/checkpoint_dir/ -eval_val_every 3188 -learning_rate_decay_by_val_loss 1 -batch_size 128 -batch_normalization 0 -non_glove_embedding 1 -learn_embeddings 0 -learning_rate 0.0002  -layer_normalization 0 -max_epochs 200 -grad_clip 0 -random_crops 1 -l2 0.0 -seq_length 50 -zoneout 0  -multiplicative_integration 0 -print_every 50 -lsuv_init 1 -max_norm 0 -model sdrnn -num_layers 36 -rnn_size 256 -embedding_size 256 -dropout 0.05 -recurrent_dropout 0.025 -gpuid 0```
 

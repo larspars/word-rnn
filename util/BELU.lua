@@ -1,17 +1,4 @@
 
-
---[[
-require 'models/CMulConstant'
-function BELU(size)
-    local s = nn.Sequential()
-    s:add(nn.MulConstantSlices(torch.Tensor({ 1, -1 }):repeatTensor(size/2), false, 2))
-    s:add(nn.ELU())
-    s:add(nn.MulConstantSlices(torch.Tensor({ 1, -1 }):repeatTensor(size/2), false, 2))
-    return s
-end
-
-return BELU 
---]]
 local BELU , parent = torch.class('BELU','nn.ELU')
 
 function BELU:__init()
@@ -36,11 +23,8 @@ end
 function BELU:updateGradInput(input, gradOutput)
   local s = input:size(2) / 2
   input[{{}, {1,s}}]:mul(-1)
-  --gradOutput = gradOutput:clone()
-  --gradOutput[{{}, {1,s}}]:mul(-1)
   parent.updateGradInput(self, input, gradOutput)
   input[{{}, {1,s}}]:mul(-1)
-  --gradOutput[{{}, {1,s}}]:mul(-1)
 
   return self.gradInput
 end

@@ -54,7 +54,8 @@ $ luarocks install nngraph
 $ luarocks install nninit 
 $ luarocks install optim
 $ luarocks install underscore.lua --from=http://marcusirven.s3.amazonaws.com/rocks/
-$ luarocks install lrexlib-pcre PCRE_DIR=/lib/x86_64-linux-gnu/
+$ luarocks install lrexlib-pcre PCRE_LIBDIR=/lib/x86_64-linux-gnu/
+$ luarocks install pprint
 ```
 
 If you'd like to train on an NVIDIA GPU using CUDA (this can be to about 15x faster), you'll of course need the GPU, and you will have to install the [CUDA Toolkit](https://developer.nvidia.com/cuda-toolkit). Then get the `cutorch` and `cunn` packages:

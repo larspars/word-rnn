@@ -404,12 +404,6 @@ function feval(x)
     local x, y = loader:next_batch(1)
     x,y = prepro(x,y)
     ------------------- forward pass -------------------
-    if opt.recurrent_dropout ~= 0 then 
-        --todo: these are shared across all layers in depth also. that's not optimal
-        SharedDropout_noise:resize(opt.batch_size, opt.rnn_size)
-        SharedDropout_noise:bernoulli(1 - opt.recurrent_dropout)
-        SharedDropout_noise:div(1 - opt.recurrent_dropout)
-    end
     local rnn_state = {[0] = init_state_global}
     local predictions = {}           -- softmax outputs
     local loss = 0

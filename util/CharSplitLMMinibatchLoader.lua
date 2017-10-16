@@ -291,7 +291,6 @@ function CharSplitLMMinibatchLoader.text_to_tensor(word_level, threshold, in_tex
         else
             unordered[token] = unordered[token] + 1 
         end
-        print(numtokens)
         numtokens = numtokens + 1
     end
     print('num tokens:', numtokens)
